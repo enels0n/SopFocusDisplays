@@ -1,0 +1,38 @@
+focus:
+  update-interval-ticks: 2
+  max-distance: 16.0
+  focus-angle-degrees: 10.0
+  lerp-speed: 0.25
+
+display:
+  base-scale: 1.0
+  focus-scale: 1.25
+  item-transform: FIXED
+  billboard: FIXED
+  brightness-block: -1
+  brightness-sky: -1
+  shadow-radius: 0.0
+  shadow-strength: 0.0
+  display-width: 0.7
+  display-height: 0.7
+
+text:
+  default-text: '<gold>Focus Text</gold>'
+  line-width: 200
+  background-enabled: false
+  background-color: '#00000000'
+  shadowed: false
+  see-through: true
+  default-alignment: CENTER
+
+create:
+  spawn-distance: 2.5
+  y-offset: 0.0
+  target-block-distance: 10
+
+fallback:
+  enabled: true
+  min-supported-protocol: 762
+  armor-stand-small: false
+  armor-stand-marker: true
+  pitch-offset: 0.0
