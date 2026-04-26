@@ -15,8 +15,9 @@ public final class FocusDisplayDefinition {
     private String text;
     private float baseScale;
     private float focusScale;
+    private DisplayConditions conditions;
 
-    public FocusDisplayDefinition(String id, FocusDisplayType type, Location location, ItemStack itemStack, String text, float baseScale, float focusScale) {
+    public FocusDisplayDefinition(String id, FocusDisplayType type, Location location, ItemStack itemStack, String text, float baseScale, float focusScale, DisplayConditions conditions) {
         this.id = id;
         this.type = type;
         this.location = location;
@@ -24,6 +25,7 @@ public final class FocusDisplayDefinition {
         this.text = text;
         this.baseScale = baseScale;
         this.focusScale = focusScale;
+        this.conditions = conditions == null ? DisplayConditions.alwaysVisible() : conditions;
     }
 
     public String getId() {
@@ -66,6 +68,10 @@ public final class FocusDisplayDefinition {
         return this.focusScale;
     }
 
+    public DisplayConditions getConditions() {
+        return this.conditions;
+    }
+
     public void save(ConfigurationSection section) {
         section.set("type", this.type.name());
         section.set("world", this.location.getWorld().getName());
@@ -76,8 +82,13 @@ public final class FocusDisplayDefinition {
         section.set("pitch", this.location.getPitch());
         section.set("item", this.itemStack == null ? null : this.itemStack.clone());
         section.set("text", this.text);
-        section.set("base-scale", this.baseScale);
-        section.set("focus-scale", this.focusScale);
+        if (this.type != FocusDisplayType.HOLOGRAM) {
+            section.set("base-scale", this.baseScale);
+            section.set("focus-scale", this.focusScale);
+        }
+        if (this.conditions != null && !this.conditions.isEmpty()) {
+            this.conditions.save(section.createSection("conditions"));
+        }
     }
 
     public static FocusDisplayDefinition fromSection(String id, ConfigurationSection section, float defaultBaseScale, float defaultFocusScale, String defaultText) {
@@ -105,6 +116,7 @@ public final class FocusDisplayDefinition {
         String text = section.getString("text", defaultText);
         float baseScale = (float) section.getDouble("base-scale", defaultBaseScale);
         float focusScale = (float) section.getDouble("focus-scale", defaultFocusScale);
-        return new FocusDisplayDefinition(id, type, location, itemStack, text, baseScale, focusScale);
+        DisplayConditions conditions = DisplayConditions.fromSection(section.getConfigurationSection("conditions"));
+        return new FocusDisplayDefinition(id, type, location, itemStack, text, baseScale, focusScale, conditions);
     }
 }

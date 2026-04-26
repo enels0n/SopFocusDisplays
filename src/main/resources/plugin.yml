@@ -4,7 +4,7 @@ main: net.enelson.sopfocusdisplays.SopFocusDisplays
 api-version: '1.21'
 authors: [E_NeLsOn]
 depend: [ProtocolLib]
-softdepend: [ViaVersion, ViaBackwards, PlaceholderAPI]
+softdepend: [PlaceholderAPI]
 commands:
   sopfocusdisplays:
     aliases: [sfd]

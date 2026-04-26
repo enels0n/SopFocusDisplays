@@ -1,6 +1,7 @@
 package net.enelson.sopfocusdisplays.manager;
 
 import net.enelson.sopfocusdisplays.SopFocusDisplays;
+import net.enelson.sopfocusdisplays.model.DisplayConditions;
 import net.enelson.sopfocusdisplays.model.FocusDisplayDefinition;
 import net.enelson.sopfocusdisplays.model.FocusDisplayType;
 import net.enelson.sopfocusdisplays.model.SpawnedFocusDisplay;
@@ -92,7 +93,8 @@ public final class FocusDisplayManager {
                 itemStack,
                 "",
                 (float) this.plugin.getConfig().getDouble("display.base-scale", 1.0D),
-                (float) this.plugin.getConfig().getDouble("display.focus-scale", 1.25D)
+                (float) this.plugin.getConfig().getDouble("display.focus-scale", 1.25D),
+                DisplayConditions.alwaysVisible()
         );
         SpawnedFocusDisplay display = new SpawnedFocusDisplay(this.plugin, definition);
         display.spawn();
@@ -113,7 +115,30 @@ public final class FocusDisplayManager {
                 null,
                 text,
                 (float) this.plugin.getConfig().getDouble("display.base-scale", 1.0D),
-                (float) this.plugin.getConfig().getDouble("display.focus-scale", 1.25D)
+                (float) this.plugin.getConfig().getDouble("display.focus-scale", 1.25D),
+                DisplayConditions.alwaysVisible()
+        );
+        SpawnedFocusDisplay display = new SpawnedFocusDisplay(this.plugin, definition);
+        display.spawn();
+        this.displays.put(id.toLowerCase(), display);
+        save();
+        return true;
+    }
+
+    public boolean createHologram(String id, Location location, String text) {
+        if (this.displays.containsKey(id.toLowerCase())) {
+            return false;
+        }
+
+        FocusDisplayDefinition definition = new FocusDisplayDefinition(
+                id,
+                FocusDisplayType.HOLOGRAM,
+                location,
+                null,
+                text,
+                (float) this.plugin.getConfig().getDouble("display.base-scale", 1.0D),
+                (float) this.plugin.getConfig().getDouble("display.focus-scale", 1.25D),
+                DisplayConditions.alwaysVisible()
         );
         SpawnedFocusDisplay display = new SpawnedFocusDisplay(this.plugin, definition);
         display.spawn();
@@ -154,7 +179,7 @@ public final class FocusDisplayManager {
 
     public boolean updateText(String id, String text) {
         SpawnedFocusDisplay display = this.displays.get(id.toLowerCase());
-        if (display == null || display.getDefinition().getType() != FocusDisplayType.TEXT) {
+        if (display == null || display.getDefinition().getType() == FocusDisplayType.ITEM) {
             return false;
         }
         display.updateText(text);
@@ -186,20 +211,14 @@ public final class FocusDisplayManager {
         lerpSpeed = Math.max(0.0F, Math.min(1.0F, lerpSpeed));
 
         for (Player player : Bukkit.getOnlinePlayers()) {
-            boolean modernClient = this.plugin.getViaVersionHook().isClientModernEnough(player);
-
             for (SpawnedFocusDisplay display : this.displays.values()) {
                 if (!display.isSameWorld(player)) {
                     continue;
                 }
 
-                display.ensureViewerMode(player, modernClient);
-                if (display.getDefinition().getType() == FocusDisplayType.TEXT) {
-                    display.syncViewerText(player, modernClient);
-                }
-
-                if (!modernClient) {
-                    continue;
+                display.ensureViewerMode(player);
+                if (display.getDefinition().getType() != FocusDisplayType.ITEM) {
+                    display.syncViewerText(player);
                 }
 
                 float current = display.getViewerScale(player.getUniqueId());
@@ -222,38 +241,43 @@ public final class FocusDisplayManager {
         }
     }
 
+    public void refreshViewerStates() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            for (SpawnedFocusDisplay display : this.displays.values()) {
+                display.invalidateViewerState(player.getUniqueId());
+            }
+        }
+    }
+
     public void initializePlayer(final Player player) {
-        final boolean modernClient = this.plugin.getViaVersionHook().isClientModernEnough(player);
         for (final SpawnedFocusDisplay display : this.displays.values()) {
             if (!display.isSameWorld(player)) {
                 continue;
             }
 
-            display.ensureViewerMode(player, modernClient);
-            if (display.getDefinition().getType() == FocusDisplayType.TEXT) {
+            display.ensureViewerMode(player);
+            if (display.getDefinition().getType() != FocusDisplayType.ITEM) {
                 display.resetViewerText(player.getUniqueId());
-                display.syncViewerText(player, modernClient);
+                display.syncViewerText(player);
             }
-            if (modernClient) {
-                display.sendScale(player, display.getDefinition().getBaseScale());
-                display.setViewerScale(player.getUniqueId(), display.getDefinition().getBaseScale());
-            }
+            display.sendScale(player, display.getDefinition().getBaseScale());
+            display.setViewerScale(player.getUniqueId(), display.getDefinition().getBaseScale());
 
-            if (display.getDefinition().getType() == FocusDisplayType.TEXT) {
-                scheduleTextResend(player, display, modernClient, 4L);
-                scheduleTextResend(player, display, modernClient, 12L);
-                scheduleTextResend(player, display, modernClient, 30L);
+            if (display.getDefinition().getType() != FocusDisplayType.ITEM) {
+                scheduleTextResend(player, display, 4L);
+                scheduleTextResend(player, display, 12L);
+                scheduleTextResend(player, display, 30L);
             }
         }
     }
 
-    private void scheduleTextResend(final Player player, final SpawnedFocusDisplay display, final boolean modernClient, long delay) {
+    private void scheduleTextResend(final Player player, final SpawnedFocusDisplay display, long delay) {
         Bukkit.getScheduler().runTaskLater(this.plugin, new Runnable() {
             @Override
             public void run() {
                 if (player.isOnline() && display.isSameWorld(player)) {
                     display.resetViewerText(player.getUniqueId());
-                    display.syncViewerText(player, modernClient);
+                    display.syncViewerText(player);
                 }
             }
         }, delay);

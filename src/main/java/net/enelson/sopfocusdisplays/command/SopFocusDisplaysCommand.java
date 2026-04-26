@@ -23,7 +23,7 @@ import java.util.List;
 public final class SopFocusDisplaysCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> SUBCOMMANDS = Arrays.asList("create", "remove", "movehere", "item", "text", "list", "reload");
-    private static final List<String> DISPLAY_TYPES = Arrays.asList("item", "text");
+    private static final List<String> DISPLAY_TYPES = Arrays.asList("item", "text", "hologram");
 
     private final SopFocusDisplays plugin;
 
@@ -67,7 +67,7 @@ public final class SopFocusDisplaysCommand implements CommandExecutor, TabComple
         Player player = (Player) sender;
         if ("create".equals(sub)) {
             if (args.length < 3) {
-                sender.sendMessage(color("&eUsage: /" + label + " create <item|text> <id> [text...]"));
+                sender.sendMessage(color("&eUsage: /" + label + " create <item|text|hologram> <id> [text...]"));
                 return true;
             }
 
@@ -92,6 +92,15 @@ public final class SopFocusDisplaysCommand implements CommandExecutor, TabComple
                         : this.plugin.getConfig().getString("text.default-text", "<gold>Focus Text</gold>");
                 boolean created = this.plugin.getFocusDisplayManager().createText(id, location, text);
                 sender.sendMessage(color(created ? "&aCreated text focus display &f" + id : "&cDisplay already exists."));
+                return true;
+            }
+
+            if ("hologram".equals(type)) {
+                String text = args.length >= 4
+                        ? String.join(" ", Arrays.copyOfRange(args, 3, args.length))
+                        : this.plugin.getConfig().getString("text.default-text", "<gold>Focus Text</gold>");
+                boolean created = this.plugin.getFocusDisplayManager().createHologram(id, location, text);
+                sender.sendMessage(color(created ? "&aCreated hologram focus display &f" + id : "&cDisplay already exists."));
                 return true;
             }
 
@@ -164,7 +173,7 @@ public final class SopFocusDisplaysCommand implements CommandExecutor, TabComple
                 if ("item".equalsIgnoreCase(args[0]) && type != FocusDisplayType.ITEM) {
                     continue;
                 }
-                if ("text".equalsIgnoreCase(args[0]) && type != FocusDisplayType.TEXT) {
+                if ("text".equalsIgnoreCase(args[0]) && type == FocusDisplayType.ITEM) {
                     continue;
                 }
                 values.add(display.getDefinition().getId());
@@ -180,14 +189,14 @@ public final class SopFocusDisplaysCommand implements CommandExecutor, TabComple
         if (target != null) {
             Location location = target.getLocation().add(0.5D, 1.0D + this.plugin.getConfig().getDouble("create.y-offset", 0.0D), 0.5D);
             location.setYaw(player.getLocation().getYaw());
-            location.setPitch(player.getLocation().getPitch() + (float) this.plugin.getConfig().getDouble("fallback.pitch-offset", 0.0D));
+            location.setPitch(player.getLocation().getPitch() + (float) this.plugin.getConfig().getDouble("create.pitch-offset", 0.0D));
             return location;
         }
 
         double distance = this.plugin.getConfig().getDouble("create.spawn-distance", 2.5D);
         Location location = player.getEyeLocation().clone().add(player.getEyeLocation().getDirection().multiply(distance));
         location.setYaw(player.getLocation().getYaw());
-        location.setPitch(player.getLocation().getPitch() + (float) this.plugin.getConfig().getDouble("fallback.pitch-offset", 0.0D));
+        location.setPitch(player.getLocation().getPitch() + (float) this.plugin.getConfig().getDouble("create.pitch-offset", 0.0D));
         return location;
     }
 
@@ -205,6 +214,7 @@ public final class SopFocusDisplaysCommand implements CommandExecutor, TabComple
     private void sendHelp(CommandSender sender) {
         sender.sendMessage(color("&e/sopfocusdisplays create item <id>"));
         sender.sendMessage(color("&e/sopfocusdisplays create text <id> <text...>"));
+        sender.sendMessage(color("&e/sopfocusdisplays create hologram <id> <text...>"));
         sender.sendMessage(color("&e/sopfocusdisplays remove <id>"));
         sender.sendMessage(color("&e/sopfocusdisplays movehere <id>"));
         sender.sendMessage(color("&e/sopfocusdisplays item <id>"));

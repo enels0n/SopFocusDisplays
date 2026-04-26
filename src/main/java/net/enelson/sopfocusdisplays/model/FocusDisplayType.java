@@ -2,7 +2,8 @@ package net.enelson.sopfocusdisplays.model;
 
 public enum FocusDisplayType {
     ITEM,
-    TEXT;
+    TEXT,
+    HOLOGRAM;
 
     public static FocusDisplayType fromString(String input) {
         if (input == null) {

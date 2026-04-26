@@ -4,6 +4,12 @@ focus:
   focus-angle-degrees: 10.0
   lerp-speed: 0.25
 
+conditions:
+  refresh-interval-ticks: 20
+
+debug:
+  conditions: false
+
 display:
   base-scale: 1.0
   focus-scale: 1.25
@@ -18,6 +24,7 @@ display:
 
 text:
   default-text: '<gold>Focus Text</gold>'
+  line-spacing: 0.3
   line-width: 200
   background-enabled: false
   background-color: '#00000000'
@@ -29,10 +36,9 @@ create:
   spawn-distance: 2.5
   y-offset: 0.0
   target-block-distance: 10
+  pitch-offset: 0.0
 
-fallback:
-  enabled: true
-  min-supported-protocol: 762
+hologram:
   armor-stand-small: false
   armor-stand-marker: true
-  pitch-offset: 0.0
+  line-spacing: 0.27
