@@ -20,21 +20,26 @@ public final class PlayerStateListener implements Listener {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
+        this.plugin.clearTransientPlayerState(event.getPlayer().getUniqueId());
+        this.plugin.getFocusDisplayManager().preparePlayer(event.getPlayer());
         scheduleInit(event.getPlayer());
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        this.plugin.clearTransientPlayerState(event.getPlayer().getUniqueId());
         this.plugin.getFocusDisplayManager().handlePlayerQuit(event.getPlayer());
     }
 
     @EventHandler
     public void onWorldChange(PlayerChangedWorldEvent event) {
+        this.plugin.getFocusDisplayManager().preparePlayer(event.getPlayer());
         scheduleInit(event.getPlayer());
     }
 
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
+        this.plugin.getFocusDisplayManager().preparePlayer(event.getPlayer());
         scheduleInit(event.getPlayer());
     }
 

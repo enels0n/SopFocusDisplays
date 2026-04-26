@@ -39,6 +39,7 @@ public final class SpawnedFocusDisplay {
     private final List<ArmorStand> hologramMain = new ArrayList<ArmorStand>();
     private final List<ArmorStand> hologramShadow = new ArrayList<ArmorStand>();
     private final Map<UUID, List<ArmorStand>> viewerHolograms = new HashMap<UUID, List<ArmorStand>>();
+    private final Map<UUID, TextDisplay> viewerTextDisplays = new HashMap<UUID, TextDisplay>();
 
     private Display mainDisplay;
     private Display shadowDisplay;
@@ -87,6 +88,7 @@ public final class SpawnedFocusDisplay {
         removeHologramLines(this.hologramMain);
         removeHologramLines(this.hologramShadow);
         removeAllViewerHolograms();
+        removeAllViewerTextDisplays();
         if (this.mainDisplay != null && this.mainDisplay.isValid()) {
             this.mainDisplay.remove();
         }
@@ -118,6 +120,10 @@ public final class SpawnedFocusDisplay {
             repositionHologramLines(this.hologramMain);
             repositionHologramLines(this.hologramShadow);
             repositionViewerHolograms();
+        } else if (this.definition.getType() == FocusDisplayType.TEXT) {
+            this.mainDisplay.teleport(location);
+            this.shadowDisplay.teleport(location);
+            repositionViewerTextDisplays();
         } else {
             this.mainDisplay.teleport(location);
             this.shadowDisplay.teleport(location);
@@ -163,6 +169,10 @@ public final class SpawnedFocusDisplay {
                     player.hideEntity(this.plugin, armorStand);
                 }
                 hideViewerHologram(player.getUniqueId(), player);
+            } else if (this.definition.getType() == FocusDisplayType.TEXT) {
+                player.hideEntity(this.plugin, this.mainDisplay);
+                player.hideEntity(this.plugin, this.shadowDisplay);
+                hideViewerTextDisplay(player.getUniqueId(), player);
             } else {
                 player.showEntity(this.plugin, this.mainDisplay);
                 player.hideEntity(this.plugin, this.shadowDisplay);
@@ -176,6 +186,10 @@ public final class SpawnedFocusDisplay {
                     player.hideEntity(this.plugin, armorStand);
                 }
                 hideViewerHologram(player.getUniqueId(), player);
+            } else if (this.definition.getType() == FocusDisplayType.TEXT) {
+                player.hideEntity(this.plugin, this.mainDisplay);
+                player.hideEntity(this.plugin, this.shadowDisplay);
+                hideViewerTextDisplay(player.getUniqueId(), player);
             } else {
                 player.hideEntity(this.plugin, this.mainDisplay);
                 player.hideEntity(this.plugin, this.shadowDisplay);
@@ -188,6 +202,34 @@ public final class SpawnedFocusDisplay {
         this.viewerTexts.remove(uniqueId);
         this.viewerVisibility.remove(uniqueId);
         removeViewerHologram(uniqueId);
+        removeViewerTextDisplay(uniqueId);
+    }
+
+    public void hideFor(Player player) {
+        if (player == null) {
+            return;
+        }
+
+        if (this.mainDisplay != null) {
+            player.hideEntity(this.plugin, this.mainDisplay);
+        }
+        if (this.shadowDisplay != null) {
+            player.hideEntity(this.plugin, this.shadowDisplay);
+        }
+        for (TextDisplay textDisplay : this.viewerTextDisplays.values()) {
+            player.hideEntity(this.plugin, textDisplay);
+        }
+        for (ArmorStand armorStand : this.hologramMain) {
+            player.hideEntity(this.plugin, armorStand);
+        }
+        for (ArmorStand armorStand : this.hologramShadow) {
+            player.hideEntity(this.plugin, armorStand);
+        }
+        for (List<ArmorStand> viewerLines : this.viewerHolograms.values()) {
+            for (ArmorStand armorStand : viewerLines) {
+                player.hideEntity(this.plugin, armorStand);
+            }
+        }
     }
 
     public void invalidateViewerState(UUID uniqueId) {
@@ -212,11 +254,13 @@ public final class SpawnedFocusDisplay {
             return;
         }
 
-        ProtocolManager protocolManager = this.plugin.getProtocolManager();
         if (this.definition.getType() == FocusDisplayType.TEXT) {
-            String currentText = this.viewerTexts.get(player.getUniqueId());
-            ((TextDisplay) this.shadowDisplay).text(this.plugin.miniMessage(currentText == null ? "" : currentText));
+            TextDisplay viewerDisplay = ensureViewerTextDisplay(player);
+            applyScale(viewerDisplay, scale);
+            showViewerTextDisplay(player.getUniqueId(), player);
+            return;
         }
+        ProtocolManager protocolManager = this.plugin.getProtocolManager();
         applyScale(this.shadowDisplay, scale);
         MetadataPackets.sendEntityMetadata(protocolManager, player, this.mainDisplay.getEntityId(), this.shadowDisplay);
     }
@@ -242,6 +286,13 @@ public final class SpawnedFocusDisplay {
             }
             hideBaseHologramFor(player);
             showViewerHologram(player.getUniqueId(), player);
+        } else if (this.definition.getType() == FocusDisplayType.TEXT) {
+            TextDisplay viewerDisplay = ensureViewerTextDisplay(player);
+            viewerDisplay.text(this.plugin.miniMessage(resolved));
+            applyScale(viewerDisplay, getViewerScale(player.getUniqueId()));
+            player.hideEntity(this.plugin, this.mainDisplay);
+            player.hideEntity(this.plugin, this.shadowDisplay);
+            showViewerTextDisplay(player.getUniqueId(), player);
         } else {
             ((TextDisplay) this.shadowDisplay).text(this.plugin.miniMessage(resolved));
             MetadataPackets.sendEntityMetadata(this.plugin.getProtocolManager(), player, this.mainDisplay.getEntityId(), this.shadowDisplay);
@@ -356,6 +407,26 @@ public final class SpawnedFocusDisplay {
         return created;
     }
 
+    private TextDisplay ensureViewerTextDisplay(Player owner) {
+        UUID viewerId = owner.getUniqueId();
+        TextDisplay existing = this.viewerTextDisplays.get(viewerId);
+        if (existing != null && existing.isValid()) {
+            return existing;
+        }
+
+        TextDisplay created = this.definition.getLocation().getWorld().spawn(this.definition.getLocation(), TextDisplay.class);
+        prepareTextDisplay(created, "", this.definition.getBaseScale(), KIND_SHADOW + "-viewer");
+        this.viewerTextDisplays.put(viewerId, created);
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (online.getUniqueId().equals(viewerId)) {
+                online.showEntity(this.plugin, created);
+            } else {
+                online.hideEntity(this.plugin, created);
+            }
+        }
+        return created;
+    }
+
     private void prepareHologramStand(ArmorStand armorStand, String text, String kind) {
         armorStand.setPersistent(false);
         armorStand.setInvulnerable(true);
@@ -397,6 +468,15 @@ public final class SpawnedFocusDisplay {
         }
     }
 
+    private void repositionViewerTextDisplays() {
+        Location location = this.definition.getLocation();
+        for (TextDisplay textDisplay : this.viewerTextDisplays.values()) {
+            if (textDisplay != null && textDisplay.isValid()) {
+                textDisplay.teleport(location);
+            }
+        }
+    }
+
     private void removeHologramLines(List<ArmorStand> stands) {
         for (ArmorStand armorStand : stands) {
             if (armorStand != null && armorStand.isValid()) {
@@ -416,6 +496,19 @@ public final class SpawnedFocusDisplay {
     private void removeAllViewerHolograms() {
         for (UUID viewerId : new ArrayList<UUID>(this.viewerHolograms.keySet())) {
             removeViewerHologram(viewerId);
+        }
+    }
+
+    private void removeViewerTextDisplay(UUID viewerId) {
+        TextDisplay textDisplay = this.viewerTextDisplays.remove(viewerId);
+        if (textDisplay != null && textDisplay.isValid()) {
+            textDisplay.remove();
+        }
+    }
+
+    private void removeAllViewerTextDisplays() {
+        for (UUID viewerId : new ArrayList<UUID>(this.viewerTextDisplays.keySet())) {
+            removeViewerTextDisplay(viewerId);
         }
     }
 
@@ -445,6 +538,20 @@ public final class SpawnedFocusDisplay {
         }
         for (ArmorStand armorStand : stands) {
             player.hideEntity(this.plugin, armorStand);
+        }
+    }
+
+    private void showViewerTextDisplay(UUID viewerId, Player player) {
+        TextDisplay textDisplay = this.viewerTextDisplays.get(viewerId);
+        if (textDisplay != null) {
+            player.showEntity(this.plugin, textDisplay);
+        }
+    }
+
+    private void hideViewerTextDisplay(UUID viewerId, Player player) {
+        TextDisplay textDisplay = this.viewerTextDisplays.get(viewerId);
+        if (textDisplay != null) {
+            player.hideEntity(this.plugin, textDisplay);
         }
     }
 

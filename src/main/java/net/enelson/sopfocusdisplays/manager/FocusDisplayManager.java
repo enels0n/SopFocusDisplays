@@ -241,6 +241,12 @@ public final class FocusDisplayManager {
         }
     }
 
+    public void preparePlayer(Player player) {
+        for (SpawnedFocusDisplay display : this.displays.values()) {
+            display.hideFor(player);
+        }
+    }
+
     public void refreshViewerStates() {
         for (Player player : Bukkit.getOnlinePlayers()) {
             for (SpawnedFocusDisplay display : this.displays.values()) {

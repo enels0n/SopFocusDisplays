@@ -2,6 +2,9 @@ package net.enelson.sopfocusdisplays;
 
 import java.io.File;
 import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -20,8 +23,11 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 public final class SopFocusDisplays extends JavaPlugin {
 
+    private static final String VIA_PROTOCOL_PLACEHOLDER = "%viaversion_player_protocol_id%";
+
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
     private final LegacyComponentSerializer legacyAmpersand = LegacyComponentSerializer.legacyAmpersand();
+    private final Map<UUID, String> protocolPlaceholderCache = new HashMap<UUID, String>();
 
     private ProtocolManager protocolManager;
     private FocusDisplayManager focusDisplayManager;
@@ -60,14 +66,6 @@ public final class SopFocusDisplays extends JavaPlugin {
                 focusDisplayManager.tickViewers();
             }
         }, 1L, interval);
-
-        long refreshInterval = Math.max(1L, getConfig().getLong("conditions.refresh-interval-ticks", 20L));
-        Bukkit.getScheduler().runTaskTimer(this, new Runnable() {
-            @Override
-            public void run() {
-                focusDisplayManager.refreshViewerStates();
-            }
-        }, refreshInterval, refreshInterval);
     }
 
     @Override
@@ -112,6 +110,13 @@ public final class SopFocusDisplays extends JavaPlugin {
         return this.focusDisplayManager;
     }
 
+    public void clearTransientPlayerState(UUID uniqueId) {
+        if (uniqueId == null) {
+            return;
+        }
+        this.protocolPlaceholderCache.remove(uniqueId);
+    }
+
     public String resolvePlaceholders(Player player, String input) {
         String value = input == null ? "" : input;
         if (value.isEmpty()) {
@@ -123,6 +128,20 @@ public final class SopFocusDisplays extends JavaPlugin {
                 Object resolved = this.placeholderMethod.invoke(null, player, value);
                 value = resolved instanceof String ? (String) resolved : value;
             } catch (Throwable ignored) {
+            }
+        }
+
+        if (player != null && input.contains(VIA_PROTOCOL_PLACEHOLDER)) {
+            String cached = this.protocolPlaceholderCache.get(player.getUniqueId());
+            String trimmed = value.trim();
+            if (isPositiveInteger(trimmed)) {
+                this.protocolPlaceholderCache.put(player.getUniqueId(), trimmed);
+            } else if (cached != null) {
+                if (VIA_PROTOCOL_PLACEHOLDER.equals(input.trim())) {
+                    value = cached;
+                } else {
+                    value = value.replace(VIA_PROTOCOL_PLACEHOLDER, cached);
+                }
             }
         }
 
@@ -277,5 +296,21 @@ public final class SopFocusDisplays extends JavaPlugin {
             }
         }
         return true;
+    }
+
+    private boolean isPositiveInteger(String value) {
+        if (value == null || value.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            if (!Character.isDigit(value.charAt(i))) {
+                return false;
+            }
+        }
+        try {
+            return Integer.parseInt(value) > 0;
+        } catch (NumberFormatException exception) {
+            return false;
+        }
     }
 }
