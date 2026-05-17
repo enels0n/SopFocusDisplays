@@ -1,13 +1,14 @@
-package net.enelson.sopfocusdisplays.model;
+package net.enelson.sopdisplays.model;
 
 import com.comphenix.protocol.ProtocolManager;
-import net.enelson.sopfocusdisplays.SopFocusDisplays;
-import net.enelson.sopfocusdisplays.util.MetadataPackets;
+import net.enelson.sopdisplays.SopDisplays;
+import net.enelson.sopdisplays.util.MetadataPackets;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
@@ -20,16 +21,18 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
-public final class SpawnedFocusDisplay {
+public final class SpawnedFocusDisplay implements ManagedFocusDisplay {
 
     private static final String KIND_MAIN = "main";
     private static final String KIND_SHADOW = "shadow";
 
-    private final SopFocusDisplays plugin;
+    private final SopDisplays plugin;
     private final FocusDisplayDefinition definition;
     private final NamespacedKey idKey;
     private final NamespacedKey kindKey;
@@ -44,16 +47,18 @@ public final class SpawnedFocusDisplay {
     private Display mainDisplay;
     private Display shadowDisplay;
 
-    public SpawnedFocusDisplay(SopFocusDisplays plugin, FocusDisplayDefinition definition) {
+    public SpawnedFocusDisplay(SopDisplays plugin, FocusDisplayDefinition definition) {
         this.plugin = plugin;
         this.definition = definition;
         this.idKey = new NamespacedKey(plugin, "display-id");
         this.kindKey = new NamespacedKey(plugin, "display-kind");
     }
 
+    @Override
     public void spawn() {
+        cleanupUnexpectedEntities();
         Location location = this.definition.getLocation();
-        if (this.definition.getType() == FocusDisplayType.TEXT) {
+        if (usesTextDisplayEntity()) {
             this.mainDisplay = location.getWorld().spawn(location, TextDisplay.class);
             prepareTextDisplay((TextDisplay) this.mainDisplay, "", this.definition.getBaseScale(), KIND_MAIN);
 
@@ -70,7 +75,7 @@ public final class SpawnedFocusDisplay {
         }
 
         for (Player player : Bukkit.getOnlinePlayers()) {
-            if (this.definition.getType() == FocusDisplayType.HOLOGRAM) {
+            if (usesArmorStandHologram()) {
                 for (ArmorStand armorStand : this.hologramMain) {
                     player.hideEntity(this.plugin, armorStand);
                 }
@@ -84,6 +89,7 @@ public final class SpawnedFocusDisplay {
         }
     }
 
+    @Override
     public void remove() {
         removeHologramLines(this.hologramMain);
         removeHologramLines(this.hologramShadow);
@@ -100,6 +106,7 @@ public final class SpawnedFocusDisplay {
         this.viewerVisibility.clear();
     }
 
+    @Override
     public void updateItem(ItemStack itemStack) {
         this.definition.setItemStack(itemStack);
         if (this.definition.getType() != FocusDisplayType.ITEM) {
@@ -109,18 +116,20 @@ public final class SpawnedFocusDisplay {
         ((ItemDisplay) this.shadowDisplay).setItemStack(itemStack == null ? null : itemStack.clone());
     }
 
+    @Override
     public void updateText(String text) {
         this.definition.setText(text);
         this.viewerTexts.clear();
     }
 
+    @Override
     public void move(Location location) {
         this.definition.setLocation(location);
-        if (this.definition.getType() == FocusDisplayType.HOLOGRAM) {
+        if (usesArmorStandHologram()) {
             repositionHologramLines(this.hologramMain);
             repositionHologramLines(this.hologramShadow);
             repositionViewerHolograms();
-        } else if (this.definition.getType() == FocusDisplayType.TEXT) {
+        } else if (usesTextDisplayEntity()) {
             this.mainDisplay.teleport(location);
             this.shadowDisplay.teleport(location);
             repositionViewerTextDisplays();
@@ -130,6 +139,7 @@ public final class SpawnedFocusDisplay {
         }
     }
 
+    @Override
     public FocusDisplayDefinition getDefinition() {
         return this.definition;
     }
@@ -138,13 +148,15 @@ public final class SpawnedFocusDisplay {
         return this.mainDisplay;
     }
 
+    @Override
     public boolean isSameWorld(Player player) {
-        if (this.definition.getType() == FocusDisplayType.HOLOGRAM) {
+        if (usesArmorStandHologram()) {
             return !this.hologramMain.isEmpty() && this.hologramMain.get(0).getWorld().equals(player.getWorld());
         }
         return this.mainDisplay != null && this.mainDisplay.getWorld().equals(player.getWorld());
     }
 
+    @Override
     public void ensureViewerMode(Player player) {
         boolean visible = this.definition.getConditions().test(this.plugin, player);
         if (this.plugin.getConfig().getBoolean("debug.conditions", false)) {
@@ -154,49 +166,45 @@ public final class SpawnedFocusDisplay {
                     + " visible=" + visible);
         }
         Boolean currentVisibility = this.viewerVisibility.get(player.getUniqueId());
-        if (currentVisibility != null && currentVisibility.booleanValue() == visible) {
+        boolean changed = currentVisibility == null || currentVisibility.booleanValue() != visible;
+
+        this.viewerVisibility.put(player.getUniqueId(), visible);
+        if (changed) {
+            this.viewerTexts.remove(player.getUniqueId());
+        }
+
+        if (usesArmorStandHologram()) {
+            for (ArmorStand armorStand : this.hologramMain) {
+                player.hideEntity(this.plugin, armorStand);
+            }
+            for (ArmorStand armorStand : this.hologramShadow) {
+                player.hideEntity(this.plugin, armorStand);
+            }
+            if (!visible) {
+                hideViewerHologram(player.getUniqueId(), player);
+            }
             return;
         }
 
-        this.viewerVisibility.put(player.getUniqueId(), visible);
-        this.viewerTexts.remove(player.getUniqueId());
+        if (usesTextDisplayEntity()) {
+            player.hideEntity(this.plugin, this.mainDisplay);
+            player.hideEntity(this.plugin, this.shadowDisplay);
+            if (!visible) {
+                hideViewerTextDisplay(player.getUniqueId(), player);
+            }
+            return;
+        }
+
         if (visible) {
-            if (this.definition.getType() == FocusDisplayType.HOLOGRAM) {
-                for (ArmorStand armorStand : this.hologramMain) {
-                    player.hideEntity(this.plugin, armorStand);
-                }
-                for (ArmorStand armorStand : this.hologramShadow) {
-                    player.hideEntity(this.plugin, armorStand);
-                }
-                hideViewerHologram(player.getUniqueId(), player);
-            } else if (this.definition.getType() == FocusDisplayType.TEXT) {
-                player.hideEntity(this.plugin, this.mainDisplay);
-                player.hideEntity(this.plugin, this.shadowDisplay);
-                hideViewerTextDisplay(player.getUniqueId(), player);
-            } else {
-                player.showEntity(this.plugin, this.mainDisplay);
-                player.hideEntity(this.plugin, this.shadowDisplay);
-            }
+            player.showEntity(this.plugin, this.mainDisplay);
+            player.hideEntity(this.plugin, this.shadowDisplay);
         } else {
-            if (this.definition.getType() == FocusDisplayType.HOLOGRAM) {
-                for (ArmorStand armorStand : this.hologramMain) {
-                    player.hideEntity(this.plugin, armorStand);
-                }
-                for (ArmorStand armorStand : this.hologramShadow) {
-                    player.hideEntity(this.plugin, armorStand);
-                }
-                hideViewerHologram(player.getUniqueId(), player);
-            } else if (this.definition.getType() == FocusDisplayType.TEXT) {
-                player.hideEntity(this.plugin, this.mainDisplay);
-                player.hideEntity(this.plugin, this.shadowDisplay);
-                hideViewerTextDisplay(player.getUniqueId(), player);
-            } else {
-                player.hideEntity(this.plugin, this.mainDisplay);
-                player.hideEntity(this.plugin, this.shadowDisplay);
-            }
+            player.hideEntity(this.plugin, this.mainDisplay);
+            player.hideEntity(this.plugin, this.shadowDisplay);
         }
     }
 
+    @Override
     public void forgetViewer(UUID uniqueId) {
         this.viewerScales.remove(uniqueId);
         this.viewerTexts.remove(uniqueId);
@@ -205,6 +213,7 @@ public final class SpawnedFocusDisplay {
         removeViewerTextDisplay(uniqueId);
     }
 
+    @Override
     public void hideFor(Player player) {
         if (player == null) {
             return;
@@ -232,29 +241,34 @@ public final class SpawnedFocusDisplay {
         }
     }
 
+    @Override
     public void invalidateViewerState(UUID uniqueId) {
         this.viewerVisibility.remove(uniqueId);
     }
 
+    @Override
     public void resetViewerText(UUID uniqueId) {
         this.viewerTexts.remove(uniqueId);
     }
 
+    @Override
     public float getViewerScale(UUID uniqueId) {
         Float scale = this.viewerScales.get(uniqueId);
         return scale == null ? this.definition.getBaseScale() : scale.floatValue();
     }
 
+    @Override
     public void setViewerScale(UUID uniqueId, float scale) {
         this.viewerScales.put(uniqueId, scale);
     }
 
+    @Override
     public void sendScale(Player player, float scale) {
         if (!isVisibleTo(player) || this.definition.getType() == FocusDisplayType.HOLOGRAM) {
             return;
         }
 
-        if (this.definition.getType() == FocusDisplayType.TEXT) {
+        if (usesTextDisplayEntity()) {
             TextDisplay viewerDisplay = ensureViewerTextDisplay(player);
             applyScale(viewerDisplay, scale);
             showViewerTextDisplay(player.getUniqueId(), player);
@@ -265,6 +279,7 @@ public final class SpawnedFocusDisplay {
         MetadataPackets.sendEntityMetadata(protocolManager, player, this.mainDisplay.getEntityId(), this.shadowDisplay);
     }
 
+    @Override
     public void syncViewerText(Player player) {
         if ((this.definition.getType() != FocusDisplayType.TEXT && this.definition.getType() != FocusDisplayType.HOLOGRAM) || !isVisibleTo(player)) {
             return;
@@ -276,7 +291,7 @@ public final class SpawnedFocusDisplay {
             return;
         }
 
-        if (this.definition.getType() == FocusDisplayType.HOLOGRAM) {
+        if (usesArmorStandHologram()) {
             String[] lines = this.plugin.splitLines(resolved);
             List<ArmorStand> personal = ensureViewerHologram(player, lines.length);
             for (int i = 0; i < personal.size(); i++) {
@@ -286,7 +301,7 @@ public final class SpawnedFocusDisplay {
             }
             hideBaseHologramFor(player);
             showViewerHologram(player.getUniqueId(), player);
-        } else if (this.definition.getType() == FocusDisplayType.TEXT) {
+        } else if (usesTextDisplayEntity()) {
             TextDisplay viewerDisplay = ensureViewerTextDisplay(player);
             viewerDisplay.text(this.plugin.miniMessage(resolved));
             applyScale(viewerDisplay, getViewerScale(player.getUniqueId()));
@@ -301,9 +316,10 @@ public final class SpawnedFocusDisplay {
         this.viewerTexts.put(player.getUniqueId(), resolved);
     }
 
+    @Override
     public boolean isLookingAt(Player player, double maxDistance, double focusCosine) {
         Location baseLocation;
-        if (this.definition.getType() == FocusDisplayType.HOLOGRAM) {
+        if (usesArmorStandHologram()) {
             if (this.hologramMain.isEmpty() || !player.getWorld().equals(this.hologramMain.get(0).getWorld())) {
                 return false;
             }
@@ -317,7 +333,7 @@ public final class SpawnedFocusDisplay {
         if (player.getLocation().distanceSquared(baseLocation) > maxDistance * maxDistance) {
             return false;
         }
-        if (this.definition.getType() != FocusDisplayType.HOLOGRAM && !player.hasLineOfSight(this.mainDisplay)) {
+        if (!usesArmorStandHologram() && !player.hasLineOfSight(this.mainDisplay)) {
             return false;
         }
 
@@ -345,20 +361,106 @@ public final class SpawnedFocusDisplay {
     private void prepareItemDisplay(ItemDisplay display, ItemStack itemStack, float scale, String kind) {
         prepareDisplayBase(display, scale, kind);
         display.setItemStack(itemStack == null ? null : itemStack.clone());
-        display.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.valueOf(this.plugin.getConfig().getString("display.item-transform", "FIXED")));
+        display.setItemDisplayTransform(resolveItemTransform());
     }
 
     private void prepareTextDisplay(TextDisplay display, String text, float scale, String kind) {
         prepareDisplayBase(display, scale, kind);
         display.text(this.plugin.miniMessage(text));
-        display.setLineWidth(this.plugin.getConfig().getInt("text.line-width", 200));
-        display.setSeeThrough(this.plugin.getConfig().getBoolean("text.see-through", true));
-        display.setShadowed(this.plugin.getConfig().getBoolean("text.shadowed", false));
-        display.setAlignment(TextDisplay.TextAlignment.valueOf(this.plugin.getConfig().getString("text.default-alignment", "CENTER")));
-        if (this.plugin.getConfig().getBoolean("text.background-enabled", false)) {
-            display.setBackgroundColor(parseColor(this.plugin.getConfig().getString("text.background-color", "#00000000")));
+        display.setLineWidth(getTextLineWidth());
+        display.setSeeThrough(isTextSeeThrough());
+        display.setShadowed(isTextShadowed());
+        display.setAlignment(resolveTextAlignment());
+        if (isBackgroundEnabled()) {
+            display.setBackgroundColor(parseColor(getBackgroundColor()));
         } else {
             display.setBackgroundColor(Color.fromARGB(0x00000000));
+        }
+    }
+
+    private boolean usesArmorStandHologram() {
+        return this.definition.getType() == FocusDisplayType.HOLOGRAM && !usesTextDisplayHologram();
+    }
+
+    private boolean usesTextDisplayEntity() {
+        return this.definition.getType() == FocusDisplayType.TEXT || usesTextDisplayHologram();
+    }
+
+    private boolean usesTextDisplayHologram() {
+        if (!this.plugin.supportsDisplayEntities()) {
+            return false;
+        }
+        if (this.definition.getType() != FocusDisplayType.HOLOGRAM) {
+            return false;
+        }
+        String renderer = this.definition.getHologramRenderer();
+        if (renderer == null || renderer.trim().isEmpty()) {
+            renderer = this.plugin.getConfig().getString("hologram.renderer", "ARMOR_STAND");
+        }
+        return "TEXT_DISPLAY".equalsIgnoreCase(renderer);
+    }
+
+    private boolean isBackgroundEnabled() {
+        Boolean override = this.definition.getBackgroundEnabledOverride();
+        if (override != null) {
+            return override.booleanValue();
+        }
+        return this.plugin.getConfig().getBoolean("text.background-enabled", false);
+    }
+
+    private String getBackgroundColor() {
+        String override = this.definition.getBackgroundColorOverride();
+        if (override != null && !override.trim().isEmpty()) {
+            return override;
+        }
+        return this.plugin.getConfig().getString("text.background-color", "#00000000");
+    }
+
+    private boolean isTextShadowed() {
+        Boolean override = this.definition.getTextShadowedOverride();
+        if (override != null) {
+            return override.booleanValue();
+        }
+        return this.plugin.getConfig().getBoolean("text.shadowed", false);
+    }
+
+    private int getTextLineWidth() {
+        Integer override = this.definition.getTextLineWidthOverride();
+        if (override != null) {
+            return Math.max(1, override.intValue());
+        }
+        return this.plugin.getConfig().getInt("text.line-width", 200);
+    }
+
+    private boolean isTextSeeThrough() {
+        Boolean override = this.definition.getTextSeeThroughOverride();
+        if (override != null) {
+            return override.booleanValue();
+        }
+        return this.plugin.getConfig().getBoolean("text.see-through", true);
+    }
+
+    private TextDisplay.TextAlignment resolveTextAlignment() {
+        String value = this.definition.getTextAlignmentOverride();
+        if (value == null || value.trim().isEmpty()) {
+            value = this.plugin.getConfig().getString("text.default-alignment", "CENTER");
+        }
+        try {
+            return TextDisplay.TextAlignment.valueOf(value);
+        } catch (IllegalArgumentException exception) {
+            return TextDisplay.TextAlignment.CENTER;
+        }
+    }
+
+    private ItemDisplay.ItemDisplayTransform resolveItemTransform() {
+        String value = this.definition.getItemTransformOverride();
+        if (value == null || value.trim().isEmpty()) {
+            value = this.plugin.getConfig().getString("display.item-transform", "FIXED");
+        }
+        try {
+            return ItemDisplay.ItemDisplayTransform.valueOf(value);
+        } catch (IllegalArgumentException exception) {
+            return ItemDisplay.ItemDisplayTransform.FIXED;
         }
     }
 
@@ -381,6 +483,7 @@ public final class SpawnedFocusDisplay {
     }
 
     private List<ArmorStand> ensureViewerHologram(Player owner, int lineCount) {
+        cleanupUnexpectedEntities();
         UUID viewerId = owner.getUniqueId();
         int normalized = Math.max(1, lineCount);
         List<ArmorStand> existing = this.viewerHolograms.get(viewerId);
@@ -408,6 +511,7 @@ public final class SpawnedFocusDisplay {
     }
 
     private TextDisplay ensureViewerTextDisplay(Player owner) {
+        cleanupUnexpectedEntities();
         UUID viewerId = owner.getUniqueId();
         TextDisplay existing = this.viewerTextDisplays.get(viewerId);
         if (existing != null && existing.isValid()) {
@@ -434,8 +538,8 @@ public final class SpawnedFocusDisplay {
         armorStand.setVisible(false);
         armorStand.setBasePlate(false);
         armorStand.setArms(false);
-        armorStand.setMarker(this.plugin.getConfig().getBoolean("hologram.armor-stand-marker", true));
-        armorStand.setSmall(this.plugin.getConfig().getBoolean("hologram.armor-stand-small", false));
+        armorStand.setMarker(isHologramArmorStandMarker());
+        armorStand.setSmall(isHologramArmorStandSmall());
         applyHologramLine(armorStand, text);
         armorStand.getPersistentDataContainer().set(this.idKey, PersistentDataType.STRING, this.definition.getId());
         armorStand.getPersistentDataContainer().set(this.kindKey, PersistentDataType.STRING, kind);
@@ -557,7 +661,7 @@ public final class SpawnedFocusDisplay {
 
     private Location getHologramLineLocation(int lineIndex) {
         Location base = this.definition.getLocation().clone();
-        double spacing = this.plugin.getConfig().getDouble("hologram.line-spacing", 0.27D);
+        double spacing = getHologramLineSpacing();
         return base.add(0.0D, -spacing * lineIndex, 0.0D);
     }
 
@@ -565,19 +669,19 @@ public final class SpawnedFocusDisplay {
         display.setPersistent(false);
         display.setInvulnerable(true);
         display.setGravity(false);
-        display.setBillboard(Display.Billboard.valueOf(this.plugin.getConfig().getString("display.billboard", "FIXED")));
+        display.setBillboard(resolveDisplayBillboard());
         display.setInterpolationDelay(0);
         display.setInterpolationDuration(1);
         display.setTeleportDuration(1);
-        display.setDisplayWidth((float) this.plugin.getConfig().getDouble("display.display-width", 0.7D) * scale);
-        display.setDisplayHeight((float) this.plugin.getConfig().getDouble("display.display-height", 0.7D) * scale);
-        int blockBrightness = this.plugin.getConfig().getInt("display.brightness-block", -1);
-        int skyBrightness = this.plugin.getConfig().getInt("display.brightness-sky", -1);
+        display.setDisplayWidth(getDisplayWidth() * scale);
+        display.setDisplayHeight(getDisplayHeight() * scale);
+        int blockBrightness = getDisplayBrightnessBlock();
+        int skyBrightness = getDisplayBrightnessSky();
         if (blockBrightness >= 0 || skyBrightness >= 0) {
             display.setBrightness(new Display.Brightness(Math.max(0, blockBrightness), Math.max(0, skyBrightness)));
         }
-        display.setShadowRadius((float) this.plugin.getConfig().getDouble("display.shadow-radius", 0.0D));
-        display.setShadowStrength((float) this.plugin.getConfig().getDouble("display.shadow-strength", 0.0D));
+        display.setShadowRadius(getDisplayShadowRadius());
+        display.setShadowStrength(getDisplayShadowStrength());
         display.setRotation(this.definition.getLocation().getYaw(), this.definition.getLocation().getPitch());
         applyScale(display, scale);
         display.getPersistentDataContainer().set(this.idKey, PersistentDataType.STRING, this.definition.getId());
@@ -585,14 +689,98 @@ public final class SpawnedFocusDisplay {
     }
 
     private void applyScale(Display display, float scale) {
-        display.setDisplayWidth((float) this.plugin.getConfig().getDouble("display.display-width", 0.7D) * scale);
-        display.setDisplayHeight((float) this.plugin.getConfig().getDouble("display.display-height", 0.7D) * scale);
+        display.setDisplayWidth(getDisplayWidth() * scale);
+        display.setDisplayHeight(getDisplayHeight() * scale);
         display.setTransformation(new Transformation(
                 new Vector3f(0F, 0F, 0F),
                 new AxisAngle4f(),
                 new Vector3f(scale, scale, scale),
                 new AxisAngle4f()
         ));
+    }
+
+    private boolean isHologramArmorStandSmall() {
+        Boolean override = this.definition.getHologramArmorStandSmallOverride();
+        if (override != null) {
+            return override.booleanValue();
+        }
+        return this.plugin.getConfig().getBoolean("hologram.armor-stand-small", false);
+    }
+
+    private boolean isHologramArmorStandMarker() {
+        Boolean override = this.definition.getHologramArmorStandMarkerOverride();
+        if (override != null) {
+            return override.booleanValue();
+        }
+        return this.plugin.getConfig().getBoolean("hologram.armor-stand-marker", true);
+    }
+
+    private double getHologramLineSpacing() {
+        Double override = this.definition.getHologramLineSpacingOverride();
+        if (override != null) {
+            return override.doubleValue();
+        }
+        return this.plugin.getConfig().getDouble("hologram.line-spacing", 0.27D);
+    }
+
+    private Display.Billboard resolveDisplayBillboard() {
+        String value = this.definition.getDisplayBillboardOverride();
+        if (value == null || value.trim().isEmpty()) {
+            value = this.plugin.getConfig().getString("display.billboard", "FIXED");
+        }
+        try {
+            return Display.Billboard.valueOf(value);
+        } catch (IllegalArgumentException exception) {
+            return Display.Billboard.FIXED;
+        }
+    }
+
+    private int getDisplayBrightnessBlock() {
+        Integer override = this.definition.getDisplayBrightnessBlockOverride();
+        if (override != null) {
+            return override.intValue();
+        }
+        return this.plugin.getConfig().getInt("display.brightness-block", -1);
+    }
+
+    private int getDisplayBrightnessSky() {
+        Integer override = this.definition.getDisplayBrightnessSkyOverride();
+        if (override != null) {
+            return override.intValue();
+        }
+        return this.plugin.getConfig().getInt("display.brightness-sky", -1);
+    }
+
+    private float getDisplayShadowRadius() {
+        Float override = this.definition.getDisplayShadowRadiusOverride();
+        if (override != null) {
+            return override.floatValue();
+        }
+        return (float) this.plugin.getConfig().getDouble("display.shadow-radius", 0.0D);
+    }
+
+    private float getDisplayShadowStrength() {
+        Float override = this.definition.getDisplayShadowStrengthOverride();
+        if (override != null) {
+            return override.floatValue();
+        }
+        return (float) this.plugin.getConfig().getDouble("display.shadow-strength", 0.0D);
+    }
+
+    private float getDisplayWidth() {
+        Float override = this.definition.getDisplayWidthOverride();
+        if (override != null) {
+            return override.floatValue();
+        }
+        return (float) this.plugin.getConfig().getDouble("display.display-width", 0.7D);
+    }
+
+    private float getDisplayHeight() {
+        Float override = this.definition.getDisplayHeightOverride();
+        if (override != null) {
+            return override.floatValue();
+        }
+        return (float) this.plugin.getConfig().getDouble("display.display-height", 0.7D);
     }
 
     private Color parseColor(String input) {
@@ -606,6 +794,48 @@ public final class SpawnedFocusDisplay {
             return Color.fromARGB((int) raw);
         } catch (Throwable ignored) {
             return Color.fromARGB(0x00000000);
+        }
+    }
+
+    private void cleanupUnexpectedEntities() {
+        Location base = this.definition.getLocation();
+        if (base == null || base.getWorld() == null) {
+            return;
+        }
+        Set<UUID> keep = new HashSet<UUID>();
+        if (this.mainDisplay != null && this.mainDisplay.isValid()) {
+            keep.add(this.mainDisplay.getUniqueId());
+        }
+        if (this.shadowDisplay != null && this.shadowDisplay.isValid()) {
+            keep.add(this.shadowDisplay.getUniqueId());
+        }
+        collectArmorStandIds(this.hologramMain, keep);
+        collectArmorStandIds(this.hologramShadow, keep);
+        for (List<ArmorStand> stands : this.viewerHolograms.values()) {
+            collectArmorStandIds(stands, keep);
+        }
+        for (TextDisplay textDisplay : this.viewerTextDisplays.values()) {
+            if (textDisplay != null && textDisplay.isValid()) {
+                keep.add(textDisplay.getUniqueId());
+            }
+        }
+
+        for (Entity entity : new ArrayList<Entity>(base.getWorld().getEntities())) {
+            String value = entity.getPersistentDataContainer().get(this.idKey, PersistentDataType.STRING);
+            if (value == null || !this.definition.getId().equalsIgnoreCase(value)) {
+                continue;
+            }
+            if (!keep.contains(entity.getUniqueId())) {
+                entity.remove();
+            }
+        }
+    }
+
+    private static void collectArmorStandIds(List<ArmorStand> stands, Set<UUID> keep) {
+        for (ArmorStand armorStand : stands) {
+            if (armorStand != null && armorStand.isValid()) {
+                keep.add(armorStand.getUniqueId());
+            }
         }
     }
 }

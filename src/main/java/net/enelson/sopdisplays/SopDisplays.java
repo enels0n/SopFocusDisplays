@@ -1,4 +1,4 @@
-package net.enelson.sopfocusdisplays;
+package net.enelson.sopdisplays;
 
 import java.io.File;
 import java.lang.reflect.Method;
@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -14,31 +15,37 @@ import org.bukkit.plugin.java.JavaPlugin;
 import com.comphenix.protocol.ProtocolLibrary;
 import com.comphenix.protocol.ProtocolManager;
 
-import net.enelson.sopfocusdisplays.command.SopFocusDisplaysCommand;
-import net.enelson.sopfocusdisplays.listener.PlayerStateListener;
-import net.enelson.sopfocusdisplays.manager.FocusDisplayManager;
+import net.enelson.sopdisplays.command.SopDisplaysCommand;
+import net.enelson.sopdisplays.listener.PlayerStateListener;
+import net.enelson.sopdisplays.manager.FocusDisplayManager;
+import net.enelson.sopli.lib.SopLib;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
-public final class SopFocusDisplays extends JavaPlugin {
+public final class SopDisplays extends JavaPlugin {
 
     private static final String VIA_PROTOCOL_PLACEHOLDER = "%viaversion_player_protocol_id%";
 
-    private final MiniMessage miniMessage = MiniMessage.miniMessage();
     private final LegacyComponentSerializer legacyAmpersand = LegacyComponentSerializer.legacyAmpersand();
+    private final LegacyComponentSerializer legacySection = LegacyComponentSerializer.legacySection();
     private final Map<UUID, String> protocolPlaceholderCache = new HashMap<UUID, String>();
 
     private ProtocolManager protocolManager;
     private FocusDisplayManager focusDisplayManager;
     private Method placeholderMethod;
+    private boolean displayEntitiesSupported;
 
     @Override
     public void onEnable() {
-        if (!isModernDisplayServer()) {
-            getLogger().severe("ItemDisplay is not supported on this server version.");
+        if (SopLib.getInstance() == null) {
+            getLogger().severe("SopLib is not initialized. SopDisplays requires SopLib.");
             Bukkit.getPluginManager().disablePlugin(this);
             return;
+        }
+
+        this.displayEntitiesSupported = isModernDisplayServer();
+        if (!this.displayEntitiesSupported) {
+            getLogger().warning("Display entities are not supported on this server version. Running in ARMOR_STAND-only mode.");
         }
 
         saveDefaultConfig();
@@ -51,10 +58,10 @@ public final class SopFocusDisplays extends JavaPlugin {
         this.focusDisplayManager = new FocusDisplayManager(this);
         this.focusDisplayManager.load();
 
-        SopFocusDisplaysCommand command = new SopFocusDisplaysCommand(this);
-        if (getCommand("sopfocusdisplays") != null) {
-            getCommand("sopfocusdisplays").setExecutor(command);
-            getCommand("sopfocusdisplays").setTabCompleter(command);
+        SopDisplaysCommand command = new SopDisplaysCommand(this);
+        if (getCommand("sopdisplays") != null) {
+            getCommand("sopdisplays").setExecutor(command);
+            getCommand("sopdisplays").setTabCompleter(command);
         }
 
         Bukkit.getPluginManager().registerEvents(new PlayerStateListener(this), this);
@@ -94,7 +101,12 @@ public final class SopFocusDisplays extends JavaPlugin {
 
         try {
             Class<?> placeholderApiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            this.placeholderMethod = placeholderApiClass.getMethod("setPlaceholders", Player.class, String.class);
+            try {
+                this.placeholderMethod = placeholderApiClass.getMethod("setPlaceholders", Player.class, String.class);
+            } catch (NoSuchMethodException ignored) {
+                Class<?> offlinePlayerClass = Class.forName("org.bukkit.OfflinePlayer");
+                this.placeholderMethod = placeholderApiClass.getMethod("setPlaceholders", offlinePlayerClass, String.class);
+            }
             getLogger().info("Hooked into PlaceholderAPI.");
         } catch (Throwable throwable) {
             this.placeholderMethod = null;
@@ -104,6 +116,20 @@ public final class SopFocusDisplays extends JavaPlugin {
 
     public ProtocolManager getProtocolManager() {
         return this.protocolManager;
+    }
+
+    public boolean supportsDisplayEntities() {
+        return this.displayEntitiesSupported;
+    }
+
+    public boolean supportsEntityVisibilityApi() {
+        try {
+            Player.class.getMethod("hideEntity", Plugin.class, Entity.class);
+            Player.class.getMethod("showEntity", Plugin.class, Entity.class);
+            return true;
+        } catch (NoSuchMethodException exception) {
+            return false;
+        }
     }
 
     public FocusDisplayManager getFocusDisplayManager() {
@@ -149,11 +175,17 @@ public final class SopFocusDisplays extends JavaPlugin {
     }
 
     public String applyPlaceholders(Player player, String input) {
-        return this.normalizeFormatting(resolvePlaceholders(player, input));
+        return resolvePlaceholders(player, input);
     }
 
     public Component miniMessage(String input) {
-        return this.miniMessage.deserialize(this.normalizeFormatting(input));
+        String raw = input == null ? "" : input;
+        SopLib lib = SopLib.getInstance();
+        if (lib == null || lib.getTextUtils() == null) {
+            return this.legacy(raw);
+        }
+        String colored = lib.getTextUtils().color(raw);
+        return this.legacySection.deserialize(colored);
     }
 
     public Component miniMessage(Player player, String input) {
@@ -175,6 +207,36 @@ public final class SopFocusDisplays extends JavaPlugin {
 
     public Component legacy(Player player, String input) {
         return legacy(applyPlaceholders(player, input));
+    }
+
+    public void hideEntityCompat(Player viewer, Entity entity) {
+        if (viewer == null || entity == null) {
+            return;
+        }
+        try {
+            Method hideEntity = Player.class.getMethod("hideEntity", Plugin.class, Entity.class);
+            hideEntity.invoke(viewer, this, entity);
+        } catch (NoSuchMethodException ignored) {
+            if (entity instanceof Player) {
+                viewer.hidePlayer(this, (Player) entity);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public void showEntityCompat(Player viewer, Entity entity) {
+        if (viewer == null || entity == null) {
+            return;
+        }
+        try {
+            Method showEntity = Player.class.getMethod("showEntity", Plugin.class, Entity.class);
+            showEntity.invoke(viewer, this, entity);
+        } catch (NoSuchMethodException ignored) {
+            if (entity instanceof Player) {
+                viewer.showPlayer(this, (Player) entity);
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private String normalizeFormatting(String input) {

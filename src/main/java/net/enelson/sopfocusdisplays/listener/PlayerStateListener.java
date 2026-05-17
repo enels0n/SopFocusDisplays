@@ -1,6 +1,6 @@
-package net.enelson.sopfocusdisplays.listener;
+package net.enelson.sopdisplays.listener;
 
-import net.enelson.sopfocusdisplays.SopFocusDisplays;
+import net.enelson.sopdisplays.SopDisplays;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -12,9 +12,9 @@ import org.bukkit.event.player.PlayerRespawnEvent;
 
 public final class PlayerStateListener implements Listener {
 
-    private final SopFocusDisplays plugin;
+    private final SopDisplays plugin;
 
-    public PlayerStateListener(SopFocusDisplays plugin) {
+    public PlayerStateListener(SopDisplays plugin) {
         this.plugin = plugin;
     }
 

@@ -1,6 +1,6 @@
-package net.enelson.sopfocusdisplays.hook;
+package net.enelson.sopdisplays.hook;
 
-import net.enelson.sopfocusdisplays.SopFocusDisplays;
+import net.enelson.sopdisplays.SopDisplays;
 import org.bukkit.entity.Player;
 
 import java.lang.reflect.Method;
@@ -8,12 +8,12 @@ import java.util.UUID;
 
 public final class ViaVersionHook {
 
-    private final SopFocusDisplays plugin;
+    private final SopDisplays plugin;
     private final boolean available;
     private final Method getApiMethod;
     private final Method getPlayerVersionMethod;
 
-    public ViaVersionHook(SopFocusDisplays plugin) {
+    public ViaVersionHook(SopDisplays plugin) {
         this.plugin = plugin;
 
         Method resolvedGetApi = null;

@@ -39,6 +39,8 @@ create:
   pitch-offset: 0.0
 
 hologram:
+  # ARMOR_STAND (legacy multi-line) or TEXT_DISPLAY (modern hologram entity)
+  renderer: ARMOR_STAND
   armor-stand-small: false
   armor-stand-marker: true
   line-spacing: 0.27

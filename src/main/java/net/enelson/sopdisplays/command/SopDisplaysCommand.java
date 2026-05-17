@@ -1,9 +1,9 @@
-package net.enelson.sopfocusdisplays.command;
+package net.enelson.sopdisplays.command;
 
-import net.enelson.sopfocusdisplays.SopFocusDisplays;
-import net.enelson.sopfocusdisplays.model.FocusDisplayDefinition;
-import net.enelson.sopfocusdisplays.model.FocusDisplayType;
-import net.enelson.sopfocusdisplays.model.SpawnedFocusDisplay;
+import net.enelson.sopdisplays.SopDisplays;
+import net.enelson.sopdisplays.model.FocusDisplayDefinition;
+import net.enelson.sopdisplays.model.FocusDisplayType;
+import net.enelson.sopdisplays.model.ManagedFocusDisplay;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -20,14 +20,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-public final class SopFocusDisplaysCommand implements CommandExecutor, TabCompleter {
+public final class SopDisplaysCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> SUBCOMMANDS = Arrays.asList("create", "remove", "movehere", "item", "text", "list", "reload");
     private static final List<String> DISPLAY_TYPES = Arrays.asList("item", "text", "hologram");
 
-    private final SopFocusDisplays plugin;
+    private final SopDisplays plugin;
 
-    public SopFocusDisplaysCommand(SopFocusDisplays plugin) {
+    public SopDisplaysCommand(SopDisplays plugin) {
         this.plugin = plugin;
     }
 
@@ -41,7 +41,7 @@ public final class SopFocusDisplaysCommand implements CommandExecutor, TabComple
         String sub = args[0].toLowerCase();
         if ("reload".equals(sub)) {
             this.plugin.getFocusDisplayManager().reloadAll();
-            sender.sendMessage(color("&aSopFocusDisplays reloaded."));
+            sender.sendMessage(color("&aSopDisplays reloaded."));
             return true;
         }
 
@@ -52,7 +52,7 @@ public final class SopFocusDisplaysCommand implements CommandExecutor, TabComple
             }
 
             sender.sendMessage(color("&eDisplays:"));
-            for (SpawnedFocusDisplay display : this.plugin.getFocusDisplayManager().getDisplays()) {
+            for (ManagedFocusDisplay display : this.plugin.getFocusDisplayManager().getDisplays()) {
                 FocusDisplayDefinition definition = display.getDefinition();
                 sender.sendMessage(color("&7- &f" + definition.getId() + " &8(" + definition.getType().name().toLowerCase() + "&8)"));
             }
@@ -168,7 +168,7 @@ public final class SopFocusDisplaysCommand implements CommandExecutor, TabComple
         }
         if (args.length == 2 && Arrays.asList("remove", "movehere", "item", "text").contains(args[0].toLowerCase())) {
             List<String> values = new ArrayList<String>();
-            for (SpawnedFocusDisplay display : this.plugin.getFocusDisplayManager().getDisplays()) {
+            for (ManagedFocusDisplay display : this.plugin.getFocusDisplayManager().getDisplays()) {
                 FocusDisplayType type = display.getDefinition().getType();
                 if ("item".equalsIgnoreCase(args[0]) && type != FocusDisplayType.ITEM) {
                     continue;
@@ -212,15 +212,15 @@ public final class SopFocusDisplaysCommand implements CommandExecutor, TabComple
     }
 
     private void sendHelp(CommandSender sender) {
-        sender.sendMessage(color("&e/sopfocusdisplays create item <id>"));
-        sender.sendMessage(color("&e/sopfocusdisplays create text <id> <text...>"));
-        sender.sendMessage(color("&e/sopfocusdisplays create hologram <id> <text...>"));
-        sender.sendMessage(color("&e/sopfocusdisplays remove <id>"));
-        sender.sendMessage(color("&e/sopfocusdisplays movehere <id>"));
-        sender.sendMessage(color("&e/sopfocusdisplays item <id>"));
-        sender.sendMessage(color("&e/sopfocusdisplays text <id> <text...>"));
-        sender.sendMessage(color("&e/sopfocusdisplays list"));
-        sender.sendMessage(color("&e/sopfocusdisplays reload"));
+        sender.sendMessage(color("&e/sopdisplays create item <id>"));
+        sender.sendMessage(color("&e/sopdisplays create text <id> <text...>"));
+        sender.sendMessage(color("&e/sopdisplays create hologram <id> <text...>"));
+        sender.sendMessage(color("&e/sopdisplays remove <id>"));
+        sender.sendMessage(color("&e/sopdisplays movehere <id>"));
+        sender.sendMessage(color("&e/sopdisplays item <id>"));
+        sender.sendMessage(color("&e/sopdisplays text <id> <text...>"));
+        sender.sendMessage(color("&e/sopdisplays list"));
+        sender.sendMessage(color("&e/sopdisplays reload"));
     }
 
     private String color(String text) {

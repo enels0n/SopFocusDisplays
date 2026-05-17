@@ -1,12 +1,12 @@
-name: SopFocusDisplays
+name: SopDisplays
 version: ${project.version}
-main: net.enelson.sopfocusdisplays.SopFocusDisplays
-api-version: '1.21'
+main: net.enelson.sopdisplays.SopDisplays
+api-version: '1.16'
 authors: [E_NeLsOn]
-depend: [ProtocolLib]
+depend: [ProtocolLib, SopLib]
 softdepend: [PlaceholderAPI]
 commands:
-  sopfocusdisplays:
-    aliases: [sfd]
-    description: Manage focus displays
-    usage: /sopfocusdisplays <create|remove|movehere|item|text|list|reload>
+  sopdisplays:
+    aliases: [sd,displays]
+    description: Manage displays
+    usage: /sopdisplays <create|remove|movehere|item|text|list|reload>

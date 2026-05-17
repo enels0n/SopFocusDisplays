@@ -1,4 +1,4 @@
-package net.enelson.sopfocusdisplays.model;
+package net.enelson.sopdisplays.model;
 
 public enum FocusDisplayType {
     ITEM,

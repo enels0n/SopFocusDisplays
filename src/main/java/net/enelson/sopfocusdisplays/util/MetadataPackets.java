@@ -1,4 +1,4 @@
-package net.enelson.sopfocusdisplays.util;
+package net.enelson.sopdisplays.util;
 
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolManager;

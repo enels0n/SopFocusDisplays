@@ -1,6 +1,6 @@
-package net.enelson.sopfocusdisplays.model;
+package net.enelson.sopdisplays.model;
 
-import net.enelson.sopfocusdisplays.SopFocusDisplays;
+import net.enelson.sopdisplays.SopDisplays;
 import org.bukkit.entity.Player;
 
 public final class DisplayCondition {
@@ -33,7 +33,7 @@ public final class DisplayCondition {
         return this.output;
     }
 
-    public boolean test(SopFocusDisplays plugin, Player player) {
+    public boolean test(SopDisplays plugin, Player player) {
         if (this.type == null) {
             return true;
         }

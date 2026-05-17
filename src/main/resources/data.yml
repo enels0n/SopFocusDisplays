@@ -1,1 +1,41 @@
-displays: {}
+displays:
+  # Example:
+  # top-1:
+  #   type: TEXT
+  #   world: world
+  #   x: 16.5
+  #   y: 70.25
+  #   z: 0.5
+  #   yaw: 105.0
+  #   pitch: 0.0
+  #   text: |-
+  #     <#4478c1>TOP 10 Winners</#4478c1>
+  #     %sopdatacacher_topline_{kills}_1%
+  #   base-scale: 1.0
+  #   focus-scale: 1.0
+  #
+  #   # Text/Hologram (TextDisplay) overrides:
+  #   text-background-enabled: true
+  #   text-background-color: "#44000000"
+  #   text-shadowed: true
+  #   text-line-width: 260
+  #   text-see-through: true
+  #   text-alignment: CENTER
+  #
+  #   # Display overrides:
+  #   display-billboard: FIXED
+  #   display-brightness-block: -1
+  #   display-brightness-sky: -1
+  #   display-shadow-radius: 0.6
+  #   display-shadow-strength: 1.0
+  #   display-width: 0.7
+  #   display-height: 0.7
+  #
+  #   # Hologram-only overrides:
+  #   hologram-renderer: TEXT_DISPLAY
+  #   hologram-armor-stand-small: false
+  #   hologram-armor-stand-marker: true
+  #   hologram-line-spacing: 0.27
+  #
+  #   # Item-only override:
+  #   item-transform: FIXED

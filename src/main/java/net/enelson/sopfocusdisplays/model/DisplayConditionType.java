@@ -1,4 +1,4 @@
-package net.enelson.sopfocusdisplays.model;
+package net.enelson.sopdisplays.model;
 
 import java.util.Arrays;
 import java.util.List;

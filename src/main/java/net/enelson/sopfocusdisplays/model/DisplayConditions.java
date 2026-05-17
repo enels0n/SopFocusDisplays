@@ -1,6 +1,6 @@
-package net.enelson.sopfocusdisplays.model;
+package net.enelson.sopdisplays.model;
 
-import net.enelson.sopfocusdisplays.SopFocusDisplays;
+import net.enelson.sopdisplays.SopDisplays;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 
@@ -27,7 +27,7 @@ public final class DisplayConditions {
         return this.checks.isEmpty();
     }
 
-    public boolean test(SopFocusDisplays plugin, Player player) {
+    public boolean test(SopDisplays plugin, Player player) {
         if (this.checks.isEmpty()) {
             return true;
         }
